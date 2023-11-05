@@ -20,14 +20,15 @@ public class TgBotService
     private final NotificationTaskRepository notificationTaskRepository;
     private Logger logger = LoggerFactory.getLogger(TgBotService.class);
 
-    public TgBotService (NotificationTaskRepository notificationTaskRepository)
+    public TgBotService(NotificationTaskRepository notificationTaskRepository)
     {
         this.notificationTaskRepository = notificationTaskRepository;
     }
 
-    public String ParseMessage(Update update)
+    //Parse message type "DD.MM.YYYY HH:MM msg" and send new NotificationTask to DB
+    public String parseMessage(Update update)
     {
-        logger.info("Start ParseMessage func");
+        logger.info("Start parseMessage func");
 
         Pattern pattern = Pattern.compile("([\\d\\.\\:\\s]{16})(\\s)([\\W+]+)");
         Matcher matcher = pattern.matcher(update.message().text());
@@ -47,8 +48,8 @@ public class TgBotService
 
     }
 
-
-    public List<NotificationTask> ChooseNowDateTime()
+    //Get current LocalDateTime without ms
+    public List<NotificationTask> chooseNowDateTime()
     {
         return notificationTaskRepository.findByTimeToSendEquals(LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES));
     }
