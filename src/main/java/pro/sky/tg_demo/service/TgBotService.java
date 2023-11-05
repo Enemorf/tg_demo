@@ -1,15 +1,8 @@
 package pro.sky.tg_demo.service;
 
-import com.pengrad.telegrambot.TelegramBot;
-import com.pengrad.telegrambot.UpdatesListener;
 import com.pengrad.telegrambot.model.Update;
-import com.pengrad.telegrambot.request.SendMessage;
-import com.pengrad.telegrambot.response.SendResponse;
-import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import pro.sky.tg_demo.model.NotificationTask;
 import pro.sky.tg_demo.repository.NotificationTaskRepository;
@@ -22,56 +15,21 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
-public class TgBotService implements UpdatesListener
+public class TgBotService
 {
     private final NotificationTaskRepository notificationTaskRepository;
-
-    @Autowired
-    private TelegramBot telegramBot;
-
     private Logger logger = LoggerFactory.getLogger(TgBotService.class);
 
-    public TgBotService (NotificationTaskRepository notificationTaskRepository)
+    public TgBotService(NotificationTaskRepository notificationTaskRepository)
     {
         this.notificationTaskRepository = notificationTaskRepository;
     }
 
-    @PostConstruct
-    public void init()
+    //Parse message type "DD.MM.YYYY HH:MM msg" and send new NotificationTask to DB
+    public String parseMessage(Update update)
     {
-        telegramBot.setUpdatesListener(this);
-    }
+        logger.info("Start parseMessage func");
 
-    @Override
-    public int process(List<Update> updates) {
-
-        updates.forEach( update -> {
-            logger.info("Take message: {}",update);
-
-            //Check "/start" message or another message
-            if(CheckStart(update))
-            {
-                SendMessageTg(update.message().chat().id(),"Этот Telegram-бот отвечает на /start");
-            }
-            else
-            {
-                ParseMessage(update);
-            }
-
-        });
-        return UpdatesListener.CONFIRMED_UPDATES_ALL;
-    }
-    private boolean CheckStart(Update update)
-    {
-        return update.message().text().equals("/start");
-    }
-    private void SendMessageTg(Long chatId, String text)
-    {
-        SendResponse response = telegramBot.execute(new SendMessage(chatId,text));
-    }
-
-    private void ParseMessage(Update update)
-    {
         Pattern pattern = Pattern.compile("([\\d\\.\\:\\s]{16})(\\s)([\\W+]+)");
         Matcher matcher = pattern.matcher(update.message().text());
 
@@ -80,23 +38,19 @@ public class TgBotService implements UpdatesListener
             LocalDateTime date = LocalDateTime.parse(matcher.group(1), DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
             String message = matcher.group(3);
             notificationTaskRepository.save(new NotificationTask(update.message().chat().id(),message,date));
-            SendMessageTg(update.message().chat().id(), "Complete!");
+
+            return "Ваше напоминание записано!\n" +
+                    "Ровно в "+date+" я пришлю сообщение:\n" +
+                    message;
         }
         else
-        SendMessageTg(update.message().chat().id(), "NO COMPLETE!");
+             return "Я не понял, что вы ввели!";
+
     }
 
-    @Scheduled(cron = "0 0/1 * * * *")
-    public void ChooseCurrDateTime()
+    //Get current LocalDateTime without ms
+    public List<NotificationTask> chooseNowDateTime()
     {
-        List<NotificationTask> msg = notificationTaskRepository.
-                findByTimeToSendEquals(LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES));
-        if(msg.isEmpty())
-            return;
-
-        for(var currTxt : msg)
-        {
-            SendMessageTg(currTxt.getChatId(), currTxt.getMessageText());
-        }
+        return notificationTaskRepository.findByTimeToSendEquals(LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES));
     }
 }
